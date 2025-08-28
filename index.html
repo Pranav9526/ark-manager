@@ -1,0 +1,145 @@
+<!-- index.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ARK Gang Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100">
+  <header class="bg-slate-800/60 border-b border-slate-700">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="https://cdn.discordapp.com/attachments/1404463288921624618/1404507729594417273/New_Project_6_3E1C613.png" class="w-10 h-10 rounded" alt="ARK"/>
+        <div>
+          <h1 class="text-2xl font-bold">ARK Gang Dashboard</h1>
+          <div class="text-sm text-slate-400">Live stats powered by ARK Bot</div>
+        </div>
+      </div>
+      <div id="lastUpdated" class="text-sm text-slate-400"></div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4">
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-slate-800 rounded-xl p-4">
+        <div class="text-sm text-slate-400">Total Members</div>
+        <div id="totalUsers" class="text-3xl font-semibold mt-2">—</div>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4">
+        <div class="text-sm text-slate-400">Total Coins</div>
+        <div id="totalCoins" class="text-3xl font-semibold mt-2">—</div>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4">
+        <div class="text-sm text-slate-400">Top Balance (user id)</div>
+        <div id="topBalance" class="text-3xl font-semibold mt-2">—</div>
+      </div>
+    </section>
+
+    <section class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-slate-800 rounded-xl p-4">
+        <h2 class="text-lg font-semibold">Top Balances</h2>
+        <div id="topBalancesList" class="mt-2 space-y-2 text-sm text-slate-200"></div>
+      </div>
+
+      <div class="bg-slate-800 rounded-xl p-4">
+        <h2 class="text-lg font-semibold">Recent Transactions</h2>
+        <div id="recentTxs" class="mt-2 text-sm text-slate-200 space-y-2"></div>
+      </div>
+    </section>
+
+    <section class="mt-6">
+      <div class="bg-slate-800 rounded-xl p-4">
+        <h2 class="text-lg font-semibold">Inventory Totals</h2>
+        <div id="invTotals" class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="max-w-6xl mx-auto p-4 text-xs text-slate-500">
+    ARK Gang dashboard • Last fetched from API
+  </footer>
+
+  <script>
+    // -------- CONFIG --------
+    // Replace with your publicly accessible Bot API URL (hosted on Katabup)
+    const API_BASE = "https://your-bot-api.example.com"; // e.g. https://yourkatabupdomain.com
+    const API_KEY = ""; // if you set API_SECRET, set this value
+
+    // -------- Helpers --------
+    async function fetchStats(){
+      try {
+        let url = API_BASE + "/api/stats";
+        if (API_KEY) url += "?key=" + encodeURIComponent(API_KEY);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("API error: " + res.status);
+        const data = await res.json();
+        return data;
+      } catch (err) {
+        console.error(err);
+        return null;
+      }
+    }
+
+    function prettyNumber(n){ return n === null || n === undefined ? "—" : n.toLocaleString ? n.toLocaleString() : n; }
+
+    // -------- Render loop --------
+    async function render(){
+      const stats = await fetchStats();
+      const nowEl = document.getElementById("lastUpdated");
+      if (!stats) {
+        nowEl.innerText = "API unreachable";
+        return;
+      }
+
+      document.getElementById("totalUsers").innerText = prettyNumber(stats.total_users);
+      document.getElementById("totalCoins").innerText = prettyNumber(stats.total_coins);
+
+      if (stats.top_balances && stats.top_balances.length > 0){
+        const top = stats.top_balances[0];
+        document.getElementById("topBalance").innerText = `${top.user_id} — ${prettyNumber(top.balance)}`;
+      } else {
+        document.getElementById("topBalance").innerText = "—";
+      }
+
+      // top balances list
+      const tb = document.getElementById("topBalancesList");
+      tb.innerHTML = "";
+      (stats.top_balances || []).forEach((r,i) => {
+        const div = document.createElement("div");
+        div.className = "flex justify-between";
+        div.innerHTML = `<div class="font-medium text-slate-200">${i+1}. ${r.user_id}</div><div class="text-slate-400">${prettyNumber(r.balance)}</div>`;
+        tb.appendChild(div);
+      });
+
+      // recent txs
+      const rt = document.getElementById("recentTxs");
+      rt.innerHTML = "";
+      (stats.recent_txs || []).forEach(tx => {
+        const d = document.createElement("div");
+        d.className = "flex justify-between";
+        d.innerHTML = `<div class="text-slate-200">${tx.ts.slice(0,19).replace("T"," ")}</div><div class="text-slate-400">${tx.user_id} ${tx.type} ${tx.amount}</div>`;
+        rt.appendChild(d);
+      });
+
+      // inventory totals
+      const it = document.getElementById("invTotals");
+      it.innerHTML = "";
+      (stats.inv_totals || []).forEach(item => {
+        const box = document.createElement("div");
+        box.className = "bg-slate-700 rounded p-2";
+        box.innerHTML = `<div class="text-sm font-medium">${item.item_name}</div><div class="text-xs text-slate-300">${item.qty} total</div>`;
+        it.appendChild(box);
+      });
+
+      nowEl.innerText = "Updated: " + (new Date()).toLocaleString();
+    }
+
+    // initial + periodic refresh
+    render();
+    setInterval(render, 30 * 1000); // refresh every 30s
+  </script>
+</body>
+</html>
